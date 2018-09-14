@@ -14,7 +14,7 @@ export function activate(_context: vscode.ExtensionContext): void {
   console.log('Hygen Extension: loaded')
   let disposable = vscode.commands.registerCommand(
     'extension.hygen',
-    async () => {
+    async (params) => {
       let workspaceRoot = vscode.workspace.rootPath
       if (!workspaceRoot) {
         vscode.window.showErrorMessage(
@@ -23,6 +23,8 @@ export function activate(_context: vscode.ExtensionContext): void {
         return
       }
       const cwd = workspaceRoot
+      const generationPath = (params ? params.path : cwd)
+      console.log(`Starting generation in: ${generationPath}`)
 
       const { templates } = await resolve({
         templates: path.join(cwd, 'templates'),
@@ -51,30 +53,69 @@ export function activate(_context: vscode.ExtensionContext): void {
         /**/
       })
       if (chosen) {
+
         const res = await vscode.window.showInputBox({
-          value: '--name=mycomponent',
-          valueSelection: [7, -1]
+          value: `--name=mycomponent --path=${generationPath}`,
+          valueSelection: [7, 18]
         })
         if (res) {
           const log = msg => {}
-          const hygenOpts = {
-            templates: path.join(cwd, '_templates'),
-            cwd,
-            logger: new Logger(log),
-            debug: false,
-            createPrompter: () => prompter
-          }
-          const results = await runner(
-            `${chosen.label} ${res}`.split(' '),
-            hygenOpts
-          )
-          if (results.success) {
-            vscode.window.showInformationMessage(
-              L.map(
-                results.actions,
-                action => `Hygen: ${action.status} ${action.subject}`
-              ).join('\n')
+
+          const templateFiles = fs.readdirSync(path.join(templates, chosen.detail, chosen.description))
+
+          const fileSelectionOptions = templateFiles
+            .filter(file => file.endsWith('.ejs.t'))
+            .map(
+              file => (
+                  {
+                    label: `${file.replace('.ejs.t', '')}`,
+                    description: file,
+                    picked: true
+                  }
+                )
             )
+
+          if(fileSelectionOptions && fileSelectionOptions.length) {
+            const fileList = await vscode.window.showQuickPick(fileSelectionOptions, { canPickMany: true })
+
+            if (fileList && fileList.length) {
+              let finalOptionList = []
+              const optionFile = templateFiles.find(file => file.endsWith('options.json'))
+ 
+              if(optionFile && fs.existsSync(path.join(templates, chosen.detail, chosen.description, optionFile))) {
+                try {
+                  // @ts-ignore
+                  const options = JSON.parse(fs.readFileSync(path.join(templates, chosen.detail, chosen.description, optionFile)))
+                  const extendedOptions = await vscode.window.showQuickPick(options, { canPickMany: true })
+
+                  // @ts-ignore
+                  finalOptionList = options.map(option => `--${option.description}=${extendedOptions.find(i => i.description == i.description) ? 'true': 'false'}`).join(' ')
+                } catch (err) {
+                  vscode.window.showInformationMessage('Error loading options.json')
+                }
+              }
+
+              const hygenOpts = {
+                templates: path.join(cwd, '_templates'),
+                cwd,
+                logger: new Logger(log),
+                debug: false,
+                createPrompter: () => prompter
+              }
+              const files = fileList.map(item => item.description).join("|")
+              const results = await runner(
+                `${chosen.label}:${files} ${res} ${finalOptionList}`.trim().split(' '),
+                hygenOpts
+              )
+              if (results.success) {
+                vscode.window.showInformationMessage(
+                  L.map(
+                    results.actions,
+                    action => `Hygen: ${action.status} ${action.subject}`
+                  ).join('\n')
+                )
+              }
+            }
           }
         }
       }

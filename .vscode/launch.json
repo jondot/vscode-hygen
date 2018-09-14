@@ -32,7 +32,7 @@
             "port": 5870,
             "sourceMaps": true,
             "restart": true,
-            "outDir": "${workspaceRoot}/out/src"
+            "outFiles": ["${workspaceRoot}/out/src"]
         }
     ]
 }
