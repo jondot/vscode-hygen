@@ -60,9 +60,8 @@ export function activate(_context: vscode.ExtensionContext): void {
         })
         if (res) {
           const log = msg => {}
-
+          const { showFileSelector, showOptionSelector } = vscode.workspace.getConfiguration('hygen');
           const templateFiles = fs.readdirSync(path.join(templates, chosen.detail, chosen.description))
-
           const fileSelectionOptions = templateFiles
             .filter(file => file.endsWith('.ejs.t'))
             .map(
@@ -76,20 +75,27 @@ export function activate(_context: vscode.ExtensionContext): void {
             )
 
           if(fileSelectionOptions && fileSelectionOptions.length) {
-            const fileList = await vscode.window.showQuickPick(fileSelectionOptions, { canPickMany: true })
+            let fileList = fileSelectionOptions.slice();
+
+            if(showFileSelector && fileSelectionOptions.length > 1) {
+              fileList = await vscode.window.showQuickPick(fileSelectionOptions, { canPickMany: true })
+            }
 
             if (fileList && fileList.length) {
-              let finalOptionList = []
-              const optionFile = templateFiles.find(file => file.endsWith('options.json'))
- 
-              if(optionFile && fs.existsSync(path.join(templates, chosen.detail, chosen.description, optionFile))) {
+              let finalOptionList = '';
+              if(fs.existsSync(path.join(templates, chosen.detail, chosen.description, 'options.json'))) {
                 try {
                   // @ts-ignore
-                  const options = JSON.parse(fs.readFileSync(path.join(templates, chosen.detail, chosen.description, optionFile)))
-                  const extendedOptions = await vscode.window.showQuickPick(options, { canPickMany: true })
+                  const options = JSON.parse(fs.readFileSync(path.join(templates, chosen.detail, chosen.description, 'options.json')))
 
-                  // @ts-ignore
-                  finalOptionList = options.map(option => `--${option.description}=${extendedOptions.find(i => i.description == i.description) ? 'true': 'false'}`).join(' ')
+                  if(showOptionSelector) {
+                    const extendedOptions = await vscode.window.showQuickPick(options, { canPickMany: true })
+                    // @ts-ignore
+                    finalOptionList = options.map(option => `--${option.description}=${extendedOptions.find(item => item.description == item.description) !== null}`).join(' ')
+                  } else {
+                    finalOptionList = options.map(option => `--${option.description}=${option.picked}`).join(' ')
+                  }
+
                 } catch (err) {
                   vscode.window.showInformationMessage('Error loading options.json')
                 }
@@ -104,7 +110,7 @@ export function activate(_context: vscode.ExtensionContext): void {
               }
               const files = fileList.map(item => item.description).join("|")
               const results = await runner(
-                `${chosen.label}:${files} ${res} ${finalOptionList}`.trim().split(' '),
+                `${chosen.label}:${files} ${res} ${finalOptionList} --templateFiles=${files}`.trim().split(' '),
                 hygenOpts
               )
               if (results.success) {

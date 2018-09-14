@@ -22,6 +22,22 @@
         "title": "Hygen"
       }
     ],
+    "configuration": {
+      "type": "object",
+      "title": "Hygen",
+      "properties": {
+          "hygen.showFileSelector": {
+              "type": "boolean",
+              "default": false,
+              "description": "Shows a file selector when a template contains multiple files"
+          },
+          "hygen.showOptionSelector": {
+            "type": "boolean",
+            "default": true,
+            "description": "Shows an option selector if the folder contains a 'options.json' file"
+        }
+      }
+    },
     "menus": {
       "explorer/context": [
         {
